@@ -1,0 +1,167 @@
+1. Dijkstra Variation:
+Note: This problem can't be solved through Dijkstra without modification. Dijkstra will only revisit path with miniumum weight, but that's not sufficient, we also need to revisit node having higher weight but lesser stops.
+
+For E.g:
+5
+[[0,1,5],[1,2,5],[0,3,2],[3,1,2],[1,4,1],[4,2,1]]
+0
+2
+2
+
+Dijkstra will assign node 1 weight 4: 0 -> 3 -> 1. Then it will travel node to node 2: 0 -> 3 -> 1 -> 2 giving weight 9.
+As soon as we change weight of 1 from 5 to 4 and add a stop through normal Dijkstra, we can't reach correct solution,
+which is to reach node 2 through 0 -> 1 -> 4 -> 2 with weight 7.
+
+Sum Up: We need to modify Dijkstra, to consider 2nd path 0->1 even if node 1 has weight 5, but has only 1 stop unlike 1st path where node 1 takes 2 stops.
+
+Below is the code applying same thing, a dry run on above example will improve understanding of this method.
+T.C - O(v + elogv)
+
+#define tii tuple<int, int, int>
+#define pii pair<int, int>
+
+class Solution {
+public:
+    int findCheapestPrice(int n, vector<vector<int>>& flights, int src, int dst, int k) {
+        vector<pii> adjList[n];
+        for(auto& flight: flights){
+            int source = flight[0], dest = flight[1], price = flight[2];
+            adjList[source].push_back({dest, price});
+        }
+        return dijkstraVariation(adjList, n, src, dst, k);
+    }
+    
+    int dijkstraVariation(vector<pii> adjList[], int n, int node, int dst, int k){
+        priority_queue<tii, vector<tii>, greater<tii>> minHeap;
+        vector<int> stops(n, INT_MAX), distance(n, INT_MAX);
+        
+        int minDist = INT_MAX;
+        stops[node] = 0;
+        distance[node] = 0;
+        minHeap.push({0,node,0});
+        
+        while(!minHeap.empty()){
+            auto [curDist, curNode, curStops] = minHeap.top();
+            
+            minHeap.pop();
+            if(curNode == dst) return curDist;
+            if(curStops == k+1) continue;
+            
+            auto neighbors = adjList[curNode];
+            for(auto& neighborPair :neighbors){
+                int neighbor = neighborPair.first, edgeWt = neighborPair.second;
+                int nextDistance = curDist + edgeWt, nextStops = curStops+1;
+                
+                //This if check is same as normal Dijkstraz: Don't forget to update both distance and stops.
+                if(distance[neighbor] > nextDistance ){
+                    distance[neighbor] = nextDistance;
+                    stops[neighbor] = nextStops;
+                    minHeap.push({nextDistance, neighbor, nextStops});
+                }
+                
+                //This is main variation from Dijkstra: Don't forget to update both distance and stops.
+                else if(nextStops < stops[neighbor]){
+                    distance[neighbor] = nextDistance;
+                    stops[neighbor] = nextStops;
+                    minHeap.push({nextDistance, neighbor, nextStops});
+                }
+            }
+        }
+        return -1;
+    }
+};
+
+2. Bellman Ford
+This problem can be solved using Bellman Ford algorithm by performing k+1 relaxations, that's it, if after k+1 relaxations price is not INT_MAX, then return price otherwise return -1.
+
+Why we need tempPrice?
+Let's take an example.
+
+3
+[[0,1,100],[1,2,100],[1,2,500]]
+0
+2
+0
+
+You can take 0 stops in going from 0 to 2, suppose you didn't take temp array, and are making changes directly in price array.
+You will make k+1 -> 0+1 = 1 relaxation only.
+
+Let's start: (Not taking temp array)
+0 -> 1, original price = price[1] = Infinity, new price = 0+100 -> price[1] = 100.
+1 -> 2, original price = price[2] = Infinity, new price = 100+100 -> price[2] = 200.
+0 -> 2, original price = price[2] = 200 (calculated just above) < 500 -> No update.
+
+You see, just because, changes were made directly to price array, we didn't know that we took a stop at 1, and then moved to 2 from 1, that contradicted the condition that we can't take any stops in between.
+
+If you took temp array:
+Let's start: (Taking temp array)
+0 -> 1, original price = price[1] = Infinity, new price = 0+100 -> tempPrice[1] = 100. //tempPrice is updated, not price.
+1 -> 2, original price = price[2] = Infinity, new price = price[1] (Infinity) + 100 -> tempPrice[2] = Infinity.
+0 -> 2, original price = price[2] = Infinity,new price = price[0] + 500 -> which is smaller than infinity -> Update tempPrice[2] = 500.
+
+Hence price[2] = 500 taking 0 stops in between.
+
+T.C -
+Bellman Ford: O(ExV)
+But, since we have to relax k+1 times: O(ExK)
+
+class Solution {
+public:
+    int findCheapestPrice(int n, vector<vector<int>>& flights, int src, int dst, int k) {
+        return bellmanFordVariation(flights, n, src, dst, k);
+    }
+    
+    int bellmanFordVariation(vector<vector<int>>& flights, int n, int src, int dst, int k){
+        vector<int> price(n, 10000000), tempPrice(n, 10000000);
+        price[src] = tempPrice[src] = 0;
+        
+        //Relax k+1 times
+        for(int i=1; i<=k+1; i++){
+            for(auto& edge: flights){
+                int source = edge[0], destination = edge[1], edgeCost = edge[2];
+                int newCost = price[source] + edgeCost;
+                
+                if(newCost < tempPrice[destination]) tempPrice[destination] = newCost;
+            }
+
+			//Copy tempPrice to price
+            for(int i=0; i<n; i++) price[i] = tempPrice[i];
+        }
+        return price[dst] == 10000000 ? -1 : price[dst];
+    }
+};
+
+
+
+
+
+
+//Few explanation in comments also
+\\question --> one question, why do we need to define a temp vector for the bellman ford, in the original algo it changes the price vector only!
+
+-->Answer
+--> Sure, let's take an example.
+
+3
+[[0,1,100],[1,2,100],[1,2,500]]
+0
+2
+0
+
+You can take 0 stops in going from 0 to 2, suppose you didn't take temp array, and are making changes directly in price array.
+You will make k+1 -> 0+1 = 1 relaxation only.
+
+Let's start: (Not taking temp array)
+0 -> 1, original price = price[1] = Infinity, new price = 0+100 -> price[1] = 100.
+1 -> 2, original price = price[2] = Infinity, new price = 100+100 -> price[2] = 200.
+0 -> 2, original price = price[2] = 200 (calculated just above) < 500 -> No update.
+
+You see, just because, changes were made directly to price array, we didn't know that we took a stop at 1, and then moved to 2 from 1, that contradicted the condition that we can't take any stops in between.
+
+If you took temp array:
+Let's start: (Taking temp array)
+0 -> 1, original price = price[1] = Infinity, new price = 0+100 -> tempPrice[1] = 100. //tempPrice is updated, not price.
+1 -> 2, original price = price[2] = Infinity, new price = price[1] (Infinity) + 100 -> tempPrice[2] = Infinity.
+0 -> 2, original price = price[2] = Infinity,new price = price[0] + 500 -> which is smaller than infinity -> Update tempPrice[2] = 500.
+
+Hence price[2] = 500 taking 0 stops in between.
